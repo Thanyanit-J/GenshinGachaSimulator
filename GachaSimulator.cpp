@@ -1,8 +1,15 @@
+//! Genshin Gacha Simulator
+//! 
+//! The information of probability is based on a game Genshin Impact https://genshin.mihoyo.com/en
+//! The information of soft-pity probability is from https://bbs.mihoyo.com/ys/article/2102609
+//! The MT19937 pseudo RNG code by Makoto Matsumoto and Takuji Nishimura is from http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/ARTICLES/mt.pdf
+//!
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
-// Constant Variable
+// Constant Variables  (Feel free to adjust any variables in this section)
 const double base_rate_5star = 0.006;     // 0.6% = 0.006
 const double softpity_rate_5star = 0.324;
 const int guarantee_5star = 90;
@@ -13,7 +20,7 @@ const double softpity_rate_4star = 0.511;
 const int guarantee_4star = 10;
 const int softpity_4star = 9;
 
-const int total_attempt = 1000000;
+const int total_attempt = 100000000;
 
 const bool displayPull = false;
 
@@ -24,90 +31,61 @@ void wishCountIncrement();
 void updatePityStatus();
 double currentRate5star();
 double currentRate4star();
+void gachaDisplay(int item);
+void gachaRecord(int item);
+void gachaReport();
+int countDigit(int n);
 
-/** RNG in this code is Mersenne Twister pseudo random number generator by Makoto Matsumoto and Takuji Nishimura
- * This version of Mersenne Twister is based on Mersenne prime 2**19937 − 1
- * This C code is from http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/ARTICLES/mt.pdf
- * 
- * This Genshin Impact gacha simulator uses MT19937 algorithm according to the post https://bbs.mihoyo.com/ys/article/2102609
- */
+// RNG in this code is Mersenne Twister pseudo random number generator by Makoto Matsumoto and Takuji Nishimura
 void sgenrand(unsigned long seed);
 double genrand();
 
 // Global Variables
-int count_roll_from_last_4star = 0;
-int count_roll_from_last_5star = 0;
+unsigned int count_roll_from_last_4star = 0;
+unsigned int count_roll_from_last_5star = 0;
 int total_roll = 0;
 bool isGuarantee5star = false;
 bool isGuarantee4star = false;
 bool isSoftPity5star = false;
 bool isSoftPity4star = false;
 
+int total_5star_item = 0;
+unsigned int total_5star_item_nonPity = 0;
+unsigned int total_5star_item_softPity = 0;
+unsigned int total_5star_item_guarantee = 0;
+
+unsigned int total_4star_item = 0;
+unsigned int total_4star_item_nonPity = 0;
+unsigned int total_4star_item_softPity = 0;
+unsigned int total_4star_item_guarantee = 0;
+
+unsigned int total_3star = 0;
+
+unsigned int total_5star_nonPity = 0;
+unsigned int total_5star_softPity = 0;
+unsigned int total_4star_nonPity = 0;
+unsigned int total_4star_softPity = 0;
+
+unsigned int count_printed_item = 0;
+
+///////////////////////////////////// MAIN /////////////////////////////////////
+
 int main(int argc, char *argv[]) {
     // Using current machine time as a seed for RNG function.
     sgenrand(time(0));
-
-    int sum_roll = 0;
-    int count_5star = 0;
-    int count_5star_notPity = 0;
-    int count_5star_softPity = 0;
-    int count_5star_guarantee = 0;
-    int count_4star = 0;
-    int count_4star_notPity = 0;
-    int count_4star_softPity = 0;
-    int count_4star_guarantee = 0;
-    int count_3star = 0;
-
-    int count_printed_item = 0;
 
     for (int attempt = 0; attempt < total_attempt; attempt++){
         // Gacha time !
         int item = gacha();
 
-        // Display Gacha result
-        if(displayPull){
-            if(isGuarantee4star || isGuarantee5star)
-                printf("[%d] ", item);
-            else if((isSoftPity4star && (item == 4)) || (isSoftPity5star && (item == 5)))
-                printf(" %d* ", item);
-            else
-                printf(" %d  ", item);
-            count_printed_item++;
-            if(item == 5){
-                printf(" ---(%d)\n\n", count_printed_item);
-                count_printed_item = 0;
-            }
-            else if(count_printed_item % 10 == 0){
-                printf("\n");
-            }
-            if(attempt + 1 == total_attempt)
-                printf("\n");
-        }
-
-        // Record gacha result
-        if(item == 5){
-            count_5star++;
-            if(isGuarantee5star) count_5star_guarantee++;
-            else if(isSoftPity5star) count_5star_softPity++;
-            else count_5star_notPity++;
-        }
-        else if(item == 4){
-            count_4star++;
-            if(isGuarantee4star) count_4star_guarantee++;
-            else if(isSoftPity4star) count_4star_softPity++;
-            else count_4star_notPity++;
-        }
-        else
-            count_3star++;
+        gachaDisplay(item);
+        gachaRecord(item);
     }
     
-    // Report
-    printf("%d / %d\n",total_roll,total_attempt);
-    printf("[5-star character]\n    Total: %d\n Non-pity: %d\nSoft Pity: %d\nGuarantee: %d\n",count_5star,count_5star_notPity,count_5star_softPity,count_5star_guarantee);
-    printf("\n");
-    printf("[4-star character/weapon]\n    Total: %d\n Non-pity: %d\nSoft Pity: %d\nGuarantee: %d\n",count_4star,count_4star_notPity,count_4star_softPity,count_4star_guarantee);
-
+    gachaReport();
 }
+
+/////////////////////////////////// END MAIN ///////////////////////////////////
 
 int gacha(){
     int item = randomItemRarity();
@@ -163,7 +141,76 @@ double currentRate4star(){
     return base_rate_4star;
 }
 
+void gachaDisplay(int item){
+    if(displayPull){
+        if(isGuarantee4star || isGuarantee5star)
+            printf("[%d] ", item);
+        else if((isSoftPity4star && (item == 4)) || (isSoftPity5star && (item == 5)))
+            printf(" %d* ", item);
+        else
+            printf(" %d  ", item);
+        count_printed_item++;
+        if(item == 5){
+            printf(" ---(%d)\n\n", count_printed_item);
+            count_printed_item = 0;
+        }
+        else if(count_printed_item % 10 == 0){
+            printf("\n");
+        }
+    }
+}
 
+void gachaRecord(int item){
+    // Count items
+    if (item == 5) {
+        total_5star_item++;
+        if(isGuarantee5star) total_5star_item_guarantee++;
+        else if(isSoftPity5star) total_5star_item_softPity++;
+        else total_5star_item_nonPity++;
+    }
+    else if (item == 4) {
+        total_4star_item++;
+        if(isGuarantee4star) total_4star_item_guarantee++;
+        else if(isSoftPity4star) total_4star_item_softPity++;
+        else total_4star_item_nonPity++;
+    }
+    else 
+        total_3star++;
+
+    // Count total pity/nonpity
+    if (!isGuarantee5star && !isSoftPity5star) total_5star_nonPity++;
+    else if(!isGuarantee5star && isSoftPity5star) total_5star_softPity++;
+
+    if (!isGuarantee4star && !isSoftPity4star) total_4star_nonPity++;
+    else if (!isGuarantee4star && isSoftPity4star) total_4star_softPity++;
+}
+
+void gachaReport(){
+    int width = countDigit(total_roll);
+    printf("\nSuccessfully simulated %d out of %d Wishes.\n\n", total_roll,total_attempt);
+    printf("[5-star Drops]\n");
+    printf("     Total: %*d\t\tConsolidated probability (incl. guarantee): %.3lf%%\n", width, total_5star_item, 100.0*(double)total_5star_item/(double)total_attempt);
+    printf("  Non-pity: %*d\t\tProbability per non-pity roll: %.3lf%%\n", width, total_5star_item_nonPity, 100.0*(double)total_5star_item_nonPity/(double)total_5star_nonPity);
+    printf(" Soft Pity: %*d\t\tProbability per soft-pity roll: %.3lf%%\n", width,total_5star_item_softPity, 100.0*(double)total_5star_item_softPity/(double)total_5star_softPity);
+    printf(" Guarantee: %*d\n", width, total_5star_item_guarantee);
+    printf("\n");
+    printf("[4-star Drops]\n");
+    printf("     Total: %*d\t\tConsolidated probability (incl. guarantee): %.3lf%%\n", width, total_4star_item, 100.0*(double)total_4star_item/(double)total_attempt);
+    printf("  Non-pity: %*d\t\tProbability per non-pity roll: %.3lf%%\n", width, total_4star_item_nonPity, 100.0*(double)total_4star_item_nonPity/(double)total_4star_nonPity);
+    printf(" Soft Pity: %*d\t\tProbability per soft-pity roll: %.3lf%%\n", width, total_4star_item_softPity, 100.0*(double)total_4star_item_softPity/(double)total_4star_softPity);
+    printf(" Guarantee: %*d\n", width, total_4star_item_guarantee);
+    printf("\n");
+}
+
+int countDigit(int n){
+    int digit = 0;
+    if (n < 0) n*= -1;
+    while(n / 10 > 0) {
+        digit++;
+        n /= 10;
+    }
+    return digit;
+}
 
 // MT19937 Pseudo RNG by Makoto Matsumoto and Takuji Nishimura
 /* Period parameters */
