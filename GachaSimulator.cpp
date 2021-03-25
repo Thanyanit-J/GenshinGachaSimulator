@@ -20,7 +20,7 @@ const double softpity_rate_4star = 0.511;
 const int guarantee_4star = 10;
 const int softpity_4star = 9;
 
-const int total_attempt = 100000000;
+const int total_attempt = 1000000000;
 
 const bool displayPull = false;
 
