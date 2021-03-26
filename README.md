@@ -1,4 +1,5 @@
 # GenshinGachaSimulator
-Simulate gacha pull in Genshin Impact. (Working in Progress)
+Simulate multiple gacha pull in Genshin Impact to proof the probability.
 
-Soft pity haven't taken into account yet.
+The Gacha is for Character Event banner and Standard banner only. I don't know the soft pity for Weapon banner.
+
